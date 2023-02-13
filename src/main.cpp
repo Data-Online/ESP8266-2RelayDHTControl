@@ -37,6 +37,7 @@ int BLINK_DURATION = CONNECTED_BLINK_DURATION;
 int maxValveOpenTimeSecs = MAX_ON_TIME_SECS;
 
 void ledOnCallback();
+void valveTriggerCallBack();
 void ledOffCallback();
 bool setup_wifi(); 
 bool setupWiFiandMQTT();
@@ -54,6 +55,8 @@ void notifyValveStates(uint8_t valveNo, bool state);
 void returnMqttAddress(uint8_t valve, bool returnResp, char address[40]);
 void defineMQTTnodes();
 void notifyMoistureState(char state[3]);
+
+bool autSwitchValves = false;
 
 bool wifiConnected = false;
 unsigned long retryWiFiConnectDelay = 0;
@@ -74,12 +77,17 @@ char nodeLocation[40];
 char sensors[40];
 bool startupInitial = true;   // Used to flag startup to trigger initial actions following system start
 
+unsigned long waitUntil=0;
+
+  
 void setup()
 {
   Serial.begin(115200);
 
   DEBUG_MSG("System startup for area %s\n", area);
   
+  //pinMode(LED_BUILTIN, OUTPUT); 
+
   wifiConnected = setupWiFiandMQTT();
   // Relay switch control 
   pinMode(SWITCH1, OUTPUT);
@@ -93,12 +101,16 @@ void setup()
   #ifdef MOIST_BINARY_ACTIVE
   // Using binary moisture sensor
      pinMode(MOIST_BINARY, INPUT);
-     strcat(binary_sensor_state,"on");
+     strcat(binary_sensor_state,"off"); // off == dry
+     // Set initial state
+     notifyMoistureState(binary_sensor_state);
   #endif
 
   // Additional - optional - functions
   #ifdef DHT_active
+    //pinMode(DHTPIN, INPUT);
     dht.begin();
+    //digitalWrite(DHTPIN, LOW);  // Off initially 
   #endif 
 
   // Signal status of sensor
@@ -109,9 +121,19 @@ void setup()
   userScheduler.addTask(blinkStatusTask);
   blinkStatusTask.enable();  
 
+  #ifdef AUTONOMOUS_DELAY_ACTIVE
+    Task autonomousDelayTask;
+    int AUT_SWITCH_PERIOD = AUTONOMOUS_DELAY_MINS * 60 * 1000;
+    autonomousDelayTask.set(AUT_SWITCH_PERIOD, TASK_FOREVER, &valveTriggerCallBack);
+    autonomousDelayTask.enable();
+  #endif
+
   defineMQTTnodes();
   // Ensure all switched off at startup
   allValves(VALVE_STATE_AT_STARTUP);
+
+  waitUntil += DELAY_MS;
+  
 }
 
 void loop()
@@ -201,12 +223,14 @@ void loop()
 
 #ifdef MOIST_BINARY_ACTIVE
   if (binary_sensor.isPressed()) {
-      DEBUG_MSG("Binary sensor trigger!\n");
+      DEBUG_MSG("Binary sensor trigger! %s\n", "on");
       strcpy(binary_sensor_state,"on");
       notifyMoistureState(binary_sensor_state);
 
   }
   else if (binary_sensor.isReleased()){
+    DEBUG_MSG("Binary sensor trigger! %s\n", "off");
+
     strcpy(binary_sensor_state,"off");
     notifyMoistureState(binary_sensor_state);
   }
@@ -214,6 +238,14 @@ void loop()
   //   recheckBinarySensorDelay = millis();
   //   notifyMoistureState(binary_sensor_state);
   // }
+#endif
+
+#ifdef AUTONOMOUS_DELAY_ACTIVE
+  if (autSwitchValves) {
+    toggleSwitch(VALVE1);
+    toggleSwitch(VALVE2);
+    autSwitchValves = false;
+  }
 #endif
 
 }
@@ -271,6 +303,7 @@ bool setup_wifi() {
   // int8_t _channel = WIFI_CHANNEL;
   WiFi.mode(WIFI_STA);
   // WiFi.channel(_channel);
+  DEBUG_MSG("UID %s PWD %s", STATION_SSID,STATION_PASSWORD);
   WiFi.begin(STATION_SSID, STATION_PASSWORD);
 
   while ((WiFi.status() != WL_CONNECTED) && _retryCount < MAXWIFI_CONNECT_RETRYS) {
@@ -417,6 +450,10 @@ void  ledOnCallback() {
  blinkStatusTask.setInterval(BLINK_PERIOD);
 }
 
+void valveTriggerCallBack() {
+  autSwitchValves = true;
+}
+
 void ledOffCallback() {
   onFlag = true;
   blinkStatusTask.setCallback(&ledOnCallback);
@@ -438,6 +475,7 @@ void publishData(float p_temperature, float p_humidity, int p_moisture) {  //, f
     */
     char data[200];
     serializeJson(jsonBuffer,data);
+    //DEBUG_MSG("Runtime set to = %i\n", maxValveOpenTimeSecs);
     DEBUG_MSG("Publish data:\n");
     DEBUG_MSG(data);
     if (wifiConnected) { 

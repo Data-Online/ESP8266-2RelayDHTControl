@@ -3,7 +3,7 @@
 /* General configuration settings */
 // Application settings
 #pragma once
-#define  SW_VERSION "0.4.0"
+#define  SW_VERSION "0.5.0"
 
 // #include <Arduino.h>
 
@@ -16,28 +16,38 @@
 // // --> baseMQTT + area + valve_name + payload (ON, OFF) | MQTT on / off commands
 // // --> baseMQTT + area + state + valve_name + payload (ON, OFF)  | Confirmation of valve state sent from client
 
-// // *** SENSORS *** //
-// #define DHT_active  // Uncomment to activate DHT sensor on defined port
-
 // Support for 2 valves and sensors
 // #define MQTT_CLIENTID "test"
+
+// Run daily without MQTT node
+#define DELAY_MS 86400000   // Delay for these ms
 
 // #define DEBUG_MSG(...) 
 #define DEBUG_MSG(...) Serial.printf(__VA_ARGS__)
 // #define MOIST_active // Uncomment to actvate moisture sensor on defined analog port
 
-// #define MOIST_BINARY_ACTIVE  // Binary moisture sensor active
 
 // IO Pins definition
-#define DHTPIN D2 // DHT - D1/GPIO5
+#define DHTPIN D4  // Version 2.0
+/*
+#ifdef atkinson
+    #define DHTPIN D4 //D2 // DHT - D1/GPIO5
+#endif
+#ifdef bbs
+    #define DHTPIN D4
+#endif
+#ifdef bbstst
+    #define DHTPIN D4
+#endif
+*/
 #define MOIST_BINARY D2 // Binary moisture sensor
 #define MOIST_SENSOR 0  // Moisture sensor
 #define EXTERN_LED1 D5
-#define EXTERN_LED2 D6
+#define EXTERN_LED2 D7
 #define SWITCH1 D1
-#define SWITCH2 D3
+#define SWITCH2 D6
 #define MANUAL_SW D8
-#define BLINK_LED D7 //D4    // LED pin
+#define BLINK_LED D3 //D4    // LED pin
 
 // // WiFi
 // #define STATION_SSID  "Atkinson"
@@ -61,7 +71,8 @@
 // Valve control
 #define MAX_ON_TIME_SECS 1800  // Default maximum time to leave any valve on (seconds)
 
-#define MAX_RETRY_BEFORE_REBOOT 5 // Number of connection retries before rebooting the system
+// Need to have option to disable reboot
+#define MAX_RETRY_BEFORE_REBOOT 100 // Number of connection retries before rebooting the system
 
 #define VALVE1 0
 #define VALVE2 1
@@ -69,8 +80,9 @@
 #define OFF LOW
 #define VALVE_STATE_AT_STARTUP OFF  // Whether valves should switch on or off at startup
 
-const uint8_t valveToSwitchIndex[2] = {D1, D3};     // Valve1, Valve2
-const uint8_t valveToLEDIndex[2] = {D5, D6};
+// Version 2.0 board D3 <--> D6
+const uint8_t valveToSwitchIndex[2] = {D1, D6};     // Valve1, Valve2
+const uint8_t valveToLEDIndex[2] = {D5, D7};
 char *mqttNodeNames[] {"valve1", "valve2"};
 
 #endif
